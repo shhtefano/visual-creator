@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-studio-950 text-slate-100 font-sans;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* Custom scrollbars for DAW / workstation aesthetic */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #0e1117;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #283046;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #38435f;
+  }
+}
+
+/* Custom glow utility classes */
+.glow-cyan {
+  box-shadow: 0 0 15px rgba(0, 240, 255, 0.45);
+}
+.glow-magenta {
+  box-shadow: 0 0 15px rgba(255, 0, 127, 0.45);
+}
+.glow-purple {
+  box-shadow: 0 0 15px rgba(168, 85, 247, 0.45);
+}
+
+.text-glow-cyan {
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.7);
+}
+.text-glow-magenta {
+  text-shadow: 0 0 8px rgba(255, 0, 127, 0.7);
+}
+
+/* Range input styling for sleek studio look */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  background: #1e2433;
+  height: 4px;
+  border-radius: 2px;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -5px;
+  background-color: #00f0ff;
+  height: 14px;
+  width: 14px;
+  border-radius: 50%;
+  box-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
+  transition: transform 0.1s ease, background-color 0.1s ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  background-color: #67e8f9;
+}
+
