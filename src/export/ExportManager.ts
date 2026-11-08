@@ -82,8 +82,14 @@ export class ExportManager implements IExportEngine {
             onProgress
           );
         } catch (webcodecsErr: any) {
-          console.warn('WebCodecs failed, falling back to MediaRecorder:', webcodecsErr);
+          console.warn('WebCodecs export failed:', webcodecsErr);
           if (this.isCancelled) throw webcodecsErr;
+
+          // Never silently switch to MediaRecorder if frames have already been rendered
+          if (progressState.currentFrame > 0) {
+            throw webcodecsErr;
+          }
+
           return await this.exportWithMediaRecorder(
             config,
             width,
@@ -174,9 +180,9 @@ export class ExportManager implements IExportEngine {
     const AudioDataClass = (window as any).AudioData;
 
     let useAudio = false;
-    let audioEncoder: any = null;
 
     if (
+      config.includeAudio !== false &&
       audioBuffer &&
       typeof AudioEncoderClass === 'function' &&
       typeof AudioDataClass === 'function'
@@ -214,14 +220,18 @@ export class ExportManager implements IExportEngine {
               sampleRate: audioBuffer.sampleRate,
             }
           : undefined,
-      fastStart: 'in-memory',
+      fastStart: false,
       firstTimestampBehavior: 'offset',
     });
 
     let encoderError: Error | null = null;
     const videoEncoder = new VideoEncoderClass({
       output: (chunk: any, meta: any) => {
-        muxer.addVideoChunk(chunk, meta);
+        try {
+          muxer.addVideoChunk(chunk, meta);
+        } catch (e: any) {
+          encoderError = e;
+        }
       },
       error: (e: any) => {
         encoderError = e;
@@ -236,66 +246,87 @@ export class ExportManager implements IExportEngine {
       framerate: fps,
     });
 
-    // Initialize AudioEncoder if supported
+    // 1. Encode all audio chunks if audio is active (before rendering video frames)
     if (useAudio && audioBuffer) {
-      audioEncoder = new AudioEncoderClass({
-        output: (chunk: any, meta: any) => {
-          muxer.addAudioChunk(chunk, meta);
-        },
-        error: (e: any) => {
-          console.error('Audio encoder error:', e);
-        },
-      });
+      try {
+        let audioChunksAdded = 0;
+        const audioEncoder = new AudioEncoderClass({
+          output: (chunk: any, meta: any) => {
+            try {
+              muxer.addAudioChunk(chunk, meta);
+              audioChunksAdded++;
+            } catch (chunkErr) {
+              console.warn('Audio chunk mux error:', chunkErr);
+            }
+          },
+          error: (e: any) => {
+            console.warn('AudioEncoder warning:', e);
+          },
+        });
 
-      audioEncoder.configure({
-        codec: 'mp4a.40.2',
-        sampleRate: audioBuffer.sampleRate,
-        numberOfChannels: Math.min(2, audioBuffer.numberOfChannels),
-        bitrate: 192_000,
-      });
+        audioEncoder.configure({
+          codec: 'mp4a.40.2',
+          sampleRate: audioBuffer.sampleRate,
+          numberOfChannels: Math.min(2, audioBuffer.numberOfChannels),
+          bitrate: 192_000,
+        });
 
-      // Encode audio chunks corresponding to the export time window
-      const sampleRate = audioBuffer.sampleRate;
-      const numberOfChannels = Math.min(2, audioBuffer.numberOfChannels);
-      const startSample = Math.floor(startTime * sampleRate);
-      const totalAudioSamples = Math.floor((totalFrames / fps) * sampleRate);
-      const endSample = Math.min(audioBuffer.length, startSample + totalAudioSamples);
+        const sampleRate = audioBuffer.sampleRate;
+        const numberOfChannels = Math.min(2, audioBuffer.numberOfChannels);
+        const startSample = Math.floor(startTime * sampleRate);
+        const totalAudioSamples = Math.floor((totalFrames / fps) * sampleRate);
+        const endSample = Math.min(audioBuffer.length, startSample + totalAudioSamples);
 
-      const ch0 = audioBuffer.getChannelData(0);
-      const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : ch0;
+        const ch0 = audioBuffer.getChannelData(0);
+        const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : ch0;
 
-      const chunkSize = 4096;
-      let sampleOffset = startSample;
-      let frameOffset = 0;
+        const CHUNK_SIZE = 1024; // Exact AAC frame size
+        let sampleOffset = startSample;
+        let frameOffset = 0;
 
-      while (sampleOffset < endSample) {
-        const curFrames = Math.min(chunkSize, endSample - sampleOffset);
-        const planar = new Float32Array(curFrames * numberOfChannels);
+        while (sampleOffset < endSample) {
+          if (this.isCancelled) break;
+          const planar = new Float32Array(CHUNK_SIZE * numberOfChannels);
 
-        for (let i = 0; i < curFrames; i++) {
-          planar[i] = ch0[sampleOffset + i];
-        }
-        if (numberOfChannels > 1) {
-          for (let i = 0; i < curFrames; i++) {
-            planar[curFrames + i] = ch1[sampleOffset + i];
+          for (let i = 0; i < CHUNK_SIZE; i++) {
+            const idx = sampleOffset + i;
+            if (idx < endSample) {
+              planar[i] = ch0[idx];
+              if (numberOfChannels > 1) {
+                planar[CHUNK_SIZE + i] = ch1[idx];
+              }
+            } else {
+              planar[i] = 0;
+              if (numberOfChannels > 1) planar[CHUNK_SIZE + i] = 0;
+            }
+          }
+
+          const timestampMicros = Math.floor((frameOffset / sampleRate) * 1_000_000);
+          const audioData = new AudioDataClass({
+            format: 'f32-planar',
+            sampleRate,
+            numberOfFrames: CHUNK_SIZE,
+            numberOfChannels,
+            timestamp: timestampMicros,
+            data: planar,
+          });
+
+          audioEncoder.encode(audioData);
+          audioData.close();
+
+          sampleOffset += CHUNK_SIZE;
+          frameOffset += CHUNK_SIZE;
+
+          if (audioEncoder.encodeQueueSize > 20) {
+            await new Promise((r) => setTimeout(r, 0));
           }
         }
 
-        const timestampMicros = Math.floor((frameOffset / sampleRate) * 1_000_000);
-        const audioData = new AudioDataClass({
-          format: 'f32-planar',
-          sampleRate,
-          numberOfFrames: curFrames,
-          numberOfChannels,
-          timestamp: timestampMicros,
-          data: planar,
-        });
-
-        audioEncoder.encode(audioData);
-        audioData.close();
-
-        sampleOffset += curFrames;
-        frameOffset += curFrames;
+        await audioEncoder.flush();
+        audioEncoder.close();
+        console.log(`Audio successfully encoded: ${audioChunksAdded} AAC chunks added to MP4.`);
+      } catch (audioErr) {
+        console.warn('Audio encoding failed, proceeding with video only:', audioErr);
       }
     }
 
@@ -333,7 +364,12 @@ export class ExportManager implements IExportEngine {
       videoEncoder.encode(videoFrame, { keyFrame: isKeyFrame });
       videoFrame.close();
 
-      // 3. Update progress metrics
+      // 3. Keep encoder queue healthy to prevent GPU stalls and out-of-memory
+      while (videoEncoder.encodeQueueSize > 5) {
+        await new Promise((r) => setTimeout(r, 4));
+      }
+
+      // 4. Update progress metrics
       const now = performance.now();
       const elapsed = (now - startTimeMs) / 1000;
       const currentFps = frame > 0 ? frame / elapsed : fps;
@@ -356,28 +392,54 @@ export class ExportManager implements IExportEngine {
     progressState.status = 'muxingAudio';
     onProgress({ ...progressState });
 
-    await videoEncoder.flush();
+    // Allow UI to render the 100% progress state before flushing
+    await new Promise((resolve) => setTimeout(resolve, 30));
+
+    // 1. Flush video encoder with 25s timeout guard
+    await Promise.race([
+      videoEncoder.flush(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Video encoder flush timed out')), 25000)
+      ),
+    ]);
     videoEncoder.close();
 
-    if (audioEncoder) {
-      try {
-        await audioEncoder.flush();
-        audioEncoder.close();
-      } catch (aeErr) {
-        console.warn('AudioEncoder flush warning:', aeErr);
-      }
+    // 2. Finalize MP4 muxing safely
+    try {
+      muxer.finalize();
+    } catch (mErr: any) {
+      console.error('Muxer finalize error:', mErr);
+      throw new Error(`Failed to finalize MP4 file: ${mErr.message || 'Muxing error'}`);
     }
 
-    // Finalize MP4 muxing
-    muxer.finalize();
     const buffer = muxerTarget.buffer;
-    const outputBlob = new Blob([buffer], { type: 'video/mp4' });
+    if (!buffer || buffer.byteLength === 0) {
+      throw new Error('Generated MP4 file is empty');
+    }
 
+    const outputBlob = new Blob([buffer], { type: 'video/mp4' });
+    const blobUrl = URL.createObjectURL(outputBlob);
+
+    // 3. Complete progress
     progressState.status = 'completed';
     progressState.progress = 1.0;
-    progressState.outputBlobUrl = URL.createObjectURL(outputBlob);
+    progressState.outputBlobUrl = blobUrl;
     progressState.fileSizeBytes = outputBlob.size;
     onProgress({ ...progressState });
+
+    // 4. Auto-trigger browser download
+    try {
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = `${config.outputFileName || 'visualization'}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        if (a.parentNode) document.body.removeChild(a);
+      }, 500);
+    } catch (dlErr) {
+      console.warn('Auto download trigger error (user can still click button):', dlErr);
+    }
 
     return outputBlob;
   }

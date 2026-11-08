@@ -34,6 +34,7 @@ export const ExportModal: React.FC = () => {
   const [resolution, setResolution] = useState<ResolutionQuality>('1080p');
   const [fps, setFps] = useState<24 | 30 | 60>(30);
   const [fileName, setFileName] = useState<string>(project.name.replace(/\s+/g, '_'));
+  const [durationMode, setDurationMode] = useState<'full' | '30s' | '60s'>('full');
 
   if (!isExportModalOpen) return null;
 
@@ -48,6 +49,12 @@ export const ExportModal: React.FC = () => {
   const isError = exportProgress?.status === 'error';
 
   const effectiveDuration = duration > 0 ? duration : 10;
+  const targetDuration =
+    durationMode === '30s'
+      ? Math.min(30, effectiveDuration)
+      : durationMode === '60s'
+      ? Math.min(60, effectiveDuration)
+      : effectiveDuration;
 
   const handleStartExport = async () => {
     const config: VideoExportConfig = {
@@ -57,7 +64,7 @@ export const ExportModal: React.FC = () => {
       format: 'mp4',
       bitrate: resolution === '4k' ? 24_000_000 : resolution === '1440p' ? 16_000_000 : 10_000_000,
       startTime: 0,
-      endTime: effectiveDuration,
+      endTime: targetDuration,
       includeAudio: duration > 0,
       outputFileName: fileName || 'visual_output',
     };
@@ -156,11 +163,19 @@ export const ExportModal: React.FC = () => {
                 <div className="text-sm font-bold text-white capitalize">
                   {exportProgress.status === 'preparing' && 'Preparing Offscreen Pipeline...'}
                   {exportProgress.status === 'renderingFrames' && 'Rendering Deterministic Frames...'}
-                  {exportProgress.status === 'muxingAudio' && 'Muxing Synchronized Audio & Finalizing MP4...'}
+                  {exportProgress.status === 'muxingAudio' && 'Finalizing MP4 & Preparing Download...'}
                 </div>
                 <div className="text-xs text-slate-400 mt-1">
-                  Frame {exportProgress.currentFrame} of {exportProgress.totalFrames} (
-                  {(exportProgress.progress * 100).toFixed(1)}%)
+                  {exportProgress.status === 'muxingAudio' ? (
+                    <span className="text-cyan-400 animate-pulse font-medium">
+                      Assembling video & synchronized audio tracks... download will begin in a moment.
+                    </span>
+                  ) : (
+                    <span>
+                      Frame {exportProgress.currentFrame} of {exportProgress.totalFrames} (
+                      {(exportProgress.progress * 100).toFixed(1)}%)
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -294,6 +309,57 @@ export const ExportModal: React.FC = () => {
                     }`}
                   >
                     1:1 (Square)
+                  </button>
+                </div>
+              </div>
+
+              {/* Clip Duration Selector */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-slate-400 text-[11px] font-bold uppercase tracking-wider">
+                    Clip Duration
+                  </label>
+                  <span className="text-[11px] font-mono text-cyan-400">
+                    {Math.floor(targetDuration / 60)}:
+                    {Math.floor(targetDuration % 60)
+                      .toString()
+                      .padStart(2, '0')}{' '}
+                    ({Math.floor(targetDuration * fps)} frames)
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    onClick={() => setDurationMode('full')}
+                    className={`py-2 px-2 rounded-lg font-semibold border transition-all text-center text-xs truncate ${
+                      durationMode === 'full'
+                        ? 'bg-studio-800 border-cyan-500 text-cyan-400 shadow-sm'
+                        : 'bg-studio-950 border-studio-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Full Track ({Math.floor(effectiveDuration / 60)}:
+                    {Math.floor(effectiveDuration % 60)
+                      .toString()
+                      .padStart(2, '0')})
+                  </button>
+                  <button
+                    onClick={() => setDurationMode('30s')}
+                    className={`py-2 px-2 rounded-lg font-semibold border transition-all text-center text-xs truncate ${
+                      durationMode === '30s'
+                        ? 'bg-studio-800 border-cyan-500 text-cyan-400 shadow-sm'
+                        : 'bg-studio-950 border-studio-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    30s (Reel / TikTok)
+                  </button>
+                  <button
+                    onClick={() => setDurationMode('60s')}
+                    className={`py-2 px-2 rounded-lg font-semibold border transition-all text-center text-xs truncate ${
+                      durationMode === '60s'
+                        ? 'bg-studio-800 border-cyan-500 text-cyan-400 shadow-sm'
+                        : 'bg-studio-950 border-studio-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    60s (YouTube Short)
                   </button>
                 </div>
               </div>

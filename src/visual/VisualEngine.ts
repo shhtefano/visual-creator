@@ -83,6 +83,39 @@ export class VisualEngine {
     this.scene.add(this.dirLight2);
   }
 
+  public orbitCamera(deltaX: number, deltaY: number): void {
+    this.targetAngleX += deltaX * 0.006;
+    this.targetAngleY = Math.max(-1.3, Math.min(1.3, this.targetAngleY + deltaY * 0.006));
+  }
+
+  public zoomCamera(deltaZoom: number): void {
+    this.targetDistance = Math.max(3.5, Math.min(16.0, this.targetDistance + deltaZoom * 0.005));
+  }
+
+  public resetCamera(): void {
+    this.targetAngleX = 0;
+    this.targetAngleY = 0;
+    this.cameraAngleX = 0;
+    this.cameraAngleY = 0;
+    this.targetDistance = 7.0;
+    this.cameraDistance = 7.0;
+    this.camera.position.set(0, 0, 7.0);
+    this.camera.lookAt(0, 0, 0);
+  }
+
+  private updateCameraPosition(bassEnergy = 0): void {
+    this.cameraAngleX += (this.targetAngleX - this.cameraAngleX) * 0.12;
+    this.cameraAngleY += (this.targetAngleY - this.cameraAngleY) * 0.12;
+    this.cameraDistance += (this.targetDistance - this.cameraDistance) * 0.12;
+
+    const effectiveDist = this.cameraDistance - bassEnergy * 0.25;
+    const cosY = Math.cos(this.cameraAngleY);
+    this.camera.position.x = effectiveDist * Math.sin(this.cameraAngleX) * cosY;
+    this.camera.position.y = effectiveDist * Math.sin(this.cameraAngleY);
+    this.camera.position.z = effectiveDist * Math.cos(this.cameraAngleX) * cosY;
+    this.camera.lookAt(0, 0, 0);
+  }
+
   /**
    * Mount the WebGL canvas into a container element and initialize EffectComposer
    */
