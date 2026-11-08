@@ -18,6 +18,7 @@ export class SpectrumModule implements IVisualModule<SpectrumConfig> {
   private peakValues: number[] = [];
   private barMaterial: THREE.MeshBasicMaterial | null = null;
   private peakMaterial: THREE.MeshBasicMaterial | null = null;
+  private currentAspect = 16 / 9;
 
   constructor(config: SpectrumConfig) {
     this.config = config;
@@ -29,9 +30,18 @@ export class SpectrumModule implements IVisualModule<SpectrumConfig> {
   }
 
   public init(context: RenderContext): void {
+    this.currentAspect = context.width / (context.height || 1);
     this.rebuildMeshes();
     this.applyTransform();
     context.scene.add(this.group);
+  }
+
+  public resize(width: number, height: number, pixelRatio: number): void {
+    const newAspect = width / (height || 1);
+    if (Math.abs(newAspect - this.currentAspect) > 0.05) {
+      this.currentAspect = newAspect;
+      this.rebuildMeshes();
+    }
   }
 
   private rebuildMeshes(): void {
@@ -53,9 +63,15 @@ export class SpectrumModule implements IVisualModule<SpectrumConfig> {
 
     const primaryCol = new THREE.Color(this.config.primaryColor);
     const secondaryCol = new THREE.Color(this.config.secondaryColor);
+    const aspect = this.currentAspect || (16 / 9);
 
     if (this.config.mode === 'verticalBars') {
-      const totalWidth = 8.0;
+      let totalWidth = 8.0;
+      if (aspect < 0.8) {
+        totalWidth = 4.2;
+      } else if (aspect < 1.3) {
+        totalWidth = 6.4;
+      }
       const barSpacing = totalWidth / barCount;
       const barWidth = barSpacing * this.config.barWidth;
 
@@ -94,7 +110,7 @@ export class SpectrumModule implements IVisualModule<SpectrumConfig> {
         this.peakMeshes.push(peakMesh);
       }
     } else if (this.config.mode === 'circularRadial') {
-      const radius = this.config.innerRadius;
+      const radius = aspect < 0.8 ? Math.min(this.config.innerRadius, 1.2) : this.config.innerRadius;
       const barWidth = 0.08;
 
       for (let i = 0; i < barCount; i++) {
@@ -204,10 +220,6 @@ export class SpectrumModule implements IVisualModule<SpectrumConfig> {
         mesh.scale.set(ringScale, ringScale, 1);
       }
     }
-  }
-
-  public resize(width: number, height: number, pixelRatio: number): void {
-    // responsive adjustments
   }
 
   public updateConfig(newConfig: Partial<SpectrumConfig>): void {

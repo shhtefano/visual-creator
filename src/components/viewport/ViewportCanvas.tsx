@@ -4,7 +4,7 @@
  * Audio-Reactive Visual Studio
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Upload, Radio, Sparkles } from 'lucide-react';
 import { audioEngine } from '../../audio/AudioEngine';
 import { useStudioStore } from '../../store/useStudioStore';
@@ -13,6 +13,10 @@ import { visualEngine } from '../../visual/VisualEngine';
 export const ViewportCanvas: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [dimensions, setDimensions] = useState<{ width: number; height: number }>({
+    width: 1280,
+    height: 720,
+  });
 
   const {
     project,
@@ -25,6 +29,36 @@ export const ViewportCanvas: React.FC = () => {
     setAudioAnalysisData,
   } = useStudioStore();
 
+  // Compute maximum canvas bounding box that fits inside the container for the active aspect ratio
+  const computeFittedDimensions = useCallback(() => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const pad = 32; // 16px padding on each side
+    const availWidth = Math.max(200, rect.width - pad);
+    const availHeight = Math.max(150, rect.height - pad);
+
+    let targetAspect = 16 / 9;
+    if (project.aspectRatio === '9:16') targetAspect = 9 / 16;
+    else if (project.aspectRatio === '1:1') targetAspect = 1.0;
+
+    let w: number;
+    let h: number;
+
+    if (availWidth / availHeight > targetAspect) {
+      // Height is constraining
+      h = Math.floor(availHeight);
+      w = Math.floor(h * targetAspect);
+    } else {
+      // Width is constraining
+      w = Math.floor(availWidth);
+      h = Math.floor(w / targetAspect);
+    }
+
+    setDimensions({ width: w, height: h });
+    visualEngine.resize(w, h);
+    visualEngine.setAspectRatio(project.aspectRatio);
+  }, [project.aspectRatio]);
+
   // Mount visual engine on canvas
   useEffect(() => {
     if (!containerRef.current || !canvasRef.current) return;
@@ -33,16 +67,12 @@ export const ViewportCanvas: React.FC = () => {
     visualEngine.syncLayers(project.layers);
     visualEngine.setAspectRatio(project.aspectRatio);
 
-    // Initial resize
-    const handleResize = () => {
-      if (containerRef.current && canvasRef.current) {
-        const rect = canvasRef.current.getBoundingClientRect();
-        visualEngine.resize(rect.width, rect.height);
-      }
-    };
+    computeFittedDimensions();
 
-    window.addEventListener('resize', handleResize);
-    handleResize();
+    const resizeObserver = new ResizeObserver(() => {
+      computeFittedDimensions();
+    });
+    resizeObserver.observe(containerRef.current);
 
     // 60 FPS Animation Loop
     let animId: number;
@@ -70,14 +100,14 @@ export const ViewportCanvas: React.FC = () => {
 
     return () => {
       cancelAnimationFrame(animId);
-      window.removeEventListener('resize', handleResize);
+      resizeObserver.disconnect();
     };
   }, []);
 
-  // Update aspect ratio when project setting changes
+  // Update fitted dimensions & aspect ratio whenever project.aspectRatio changes
   useEffect(() => {
-    visualEngine.setAspectRatio(project.aspectRatio);
-  }, [project.aspectRatio]);
+    computeFittedDimensions();
+  }, [project.aspectRatio, computeFittedDimensions]);
 
   // Sync layer configuration updates
   useEffect(() => {
@@ -113,18 +143,6 @@ export const ViewportCanvas: React.FC = () => {
     }
   };
 
-  // Compute CSS aspect ratio classes
-  const getAspectClass = () => {
-    switch (project.aspectRatio) {
-      case '16:9':
-        return 'aspect-video max-w-full max-h-full';
-      case '9:16':
-        return 'aspect-[9/16] max-h-full h-full';
-      case '1:1':
-        return 'aspect-square max-h-full max-w-full';
-    }
-  };
-
   return (
     <main
       ref={containerRef}
@@ -134,11 +152,12 @@ export const ViewportCanvas: React.FC = () => {
     >
       {/* Aspect Ratio Canvas Framing */}
       <div
-        className={`relative shadow-2xl shadow-black/80 rounded-xl overflow-hidden border border-studio-800/80 bg-black flex items-center justify-center ${getAspectClass()}`}
+        style={{ width: `${dimensions.width}px`, height: `${dimensions.height}px` }}
+        className="relative shadow-2xl shadow-black/90 rounded-xl overflow-hidden border border-studio-800/80 bg-black flex items-center justify-center transition-all duration-150"
       >
         <canvas
           ref={canvasRef}
-          className="w-full h-full block object-contain"
+          className="w-full h-full block"
         />
 
         {/* Empty State Overlay if no audio loaded */}

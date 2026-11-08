@@ -62,7 +62,14 @@ export const ExportModal: React.FC = () => {
       resolution,
       fps,
       format: 'mp4',
-      bitrate: resolution === '4k' ? 24_000_000 : resolution === '1440p' ? 16_000_000 : 10_000_000,
+      bitrate:
+        resolution === '4k'
+          ? 50_000_000
+          : resolution === '1440p'
+          ? 32_000_000
+          : resolution === '1080p'
+          ? 20_000_000
+          : 12_000_000,
       startTime: 0,
       endTime: targetDuration,
       includeAudio: duration > 0,

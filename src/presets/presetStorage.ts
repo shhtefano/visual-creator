@@ -34,14 +34,18 @@ export function loadPersistedPresets(): VisualPreset[] {
       return JSON.parse(JSON.stringify(DEFAULT_PRESETS));
     }
 
-    // Ensure any newly added built-in standard presets are available
-    const existingIds = new Set(storedPresets.map((p) => p.id));
-    const merged = [...storedPresets];
+    // Preserve all custom presets while keeping built-in standard templates up to date
+    const customUserPresets = storedPresets.filter((p) => !p.isBuiltIn);
+    const customIds = new Set(customUserPresets.map((p) => p.id));
 
+    const merged: VisualPreset[] = [];
+    // 1. Always load latest built-in templates
     for (const def of DEFAULT_PRESETS) {
-      if (!existingIds.has(def.id)) {
-        merged.push(JSON.parse(JSON.stringify(def)));
-      }
+      merged.push(JSON.parse(JSON.stringify(def)));
+    }
+    // 2. Append all user custom presets
+    for (const custom of customUserPresets) {
+      merged.push(custom);
     }
 
     return merged;

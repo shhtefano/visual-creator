@@ -304,6 +304,13 @@ export const useStudioStore = create<StudioState>((set, get) => ({
         vignetteStrength: 0.5,
         animationSpeed: 1.0,
         audioReactiveZoom: 0.4,
+        showStars: true,
+        starDensity: 0.35,
+        starSpeed: 1.0,
+        seed: 42,
+        gridDensity: 32,
+        scanlineIntensity: 0.45,
+        reactivityIntensity: 1.0,
         mediaBlur: 0,
       };
     }

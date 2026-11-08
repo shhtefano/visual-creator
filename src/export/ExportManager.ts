@@ -65,7 +65,7 @@ export class ExportManager implements IExportEngine {
     onProgress({ ...progressState });
 
     // Switch visual engine to dedicated export mode (1.0 pixel ratio at exact dimensions)
-    visualEngine.setExportMode(true, width, height);
+    visualEngine.setExportMode(true, width, height, config.aspectRatio);
 
     try {
       if (this.isWebCodecsSupported()) {
@@ -140,16 +140,19 @@ export class ExportManager implements IExportEngine {
   ): Promise<Blob> {
     const VideoEncoderClass = (window as any).VideoEncoder;
 
-    // Detect supported codec
+    // Detect supported codec: prioritize studio-grade High Profile H.264 (avc1.64...)
     const candidateCodecs = [
-      'avc1.420034', // Baseline Profile 5.2
-      'avc1.4d002a', // Main Profile 4.2
-      'avc1.640028', // High Profile 4.0
-      'avc1.42E01E', // Baseline 3.0
+      'avc1.640034', // High Profile Level 5.2 (Pristine 1080p/4K studio quality)
+      'avc1.640033', // High Profile Level 5.1
+      'avc1.64002a', // High Profile Level 4.2
+      'avc1.640028', // High Profile Level 4.0
+      'avc1.4d002a', // Main Profile Level 4.2
+      'avc1.420034', // Baseline Profile fallback
+      'vp09.00.41.08', // VP9 Profile 0
       'vp8',
     ];
 
-    let selectedCodec = 'avc1.420034';
+    let selectedCodec = 'avc1.640028';
     let isSupported = false;
 
     for (const codec of candidateCodecs) {
@@ -158,7 +161,7 @@ export class ExportManager implements IExportEngine {
           codec,
           width,
           height,
-          bitrate: config.bitrate || 12_000_000,
+          bitrate: config.bitrate || 20_000_000,
           framerate: fps,
         });
         if (support && support.supported) {
@@ -238,13 +241,20 @@ export class ExportManager implements IExportEngine {
       },
     });
 
-    videoEncoder.configure({
+    const encoderConfig: any = {
       codec: selectedCodec,
       width,
       height,
-      bitrate: config.bitrate || 12_000_000,
+      bitrate: config.bitrate || 20_000_000,
+      bitrateMode: 'variable',
       framerate: fps,
-    });
+      hardwareAcceleration: 'prefer-hardware',
+    };
+    if (isAvc) {
+      encoderConfig.avc = { format: 'avc' };
+    }
+
+    videoEncoder.configure(encoderConfig);
 
     // 1. Encode all audio chunks if audio is active (before rendering video frames)
     if (useAudio && audioBuffer) {

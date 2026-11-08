@@ -17,6 +17,7 @@ import {
   Sparkles,
   Box,
   Image as ImageIcon,
+  RefreshCw,
 } from 'lucide-react';
 import { useStudioStore } from '../../store/useStudioStore';
 import {
@@ -786,15 +787,15 @@ const WaveformControls: React.FC<{
 
     <div>
       <div className="flex justify-between text-xs mb-1">
-        <span>Line Thickness</span>
-        <span className="font-mono text-studio-accent">{(config.thickness || 2.0).toFixed(1)}px</span>
+        <span>Ribbon Thickness</span>
+        <span className="font-mono text-studio-accent">{(config.thickness || 3.0).toFixed(1)}</span>
       </div>
       <input
         type="range"
-        min="1.0"
-        max="6.0"
+        min="0.5"
+        max="12.0"
         step="0.5"
-        value={config.thickness || 2.0}
+        value={config.thickness || 3.0}
         onChange={(e) => onChange({ thickness: parseFloat(e.target.value) })}
         className="w-full"
       />
@@ -802,7 +803,43 @@ const WaveformControls: React.FC<{
 
     <div>
       <div className="flex justify-between text-xs mb-1">
-        <span>Sample Count</span>
+        <span>Waveform Fluid Smoothing</span>
+        <span className="font-mono text-studio-accent">
+          {Math.round((config.waveformSmoothing ?? 0.65) * 100)}%
+        </span>
+      </div>
+      <input
+        type="range"
+        min="0.1"
+        max="0.95"
+        step="0.05"
+        value={config.waveformSmoothing ?? 0.65}
+        onChange={(e) => onChange({ waveformSmoothing: parseFloat(e.target.value) })}
+        className="w-full"
+      />
+    </div>
+
+    <div>
+      <div className="flex justify-between text-xs mb-1">
+        <span>Glow & Core Radiance</span>
+        <span className="font-mono text-studio-accent">
+          {(config.glowIntensity ?? 2.2).toFixed(1)}x
+        </span>
+      </div>
+      <input
+        type="range"
+        min="0.5"
+        max="5.0"
+        step="0.2"
+        value={config.glowIntensity ?? 2.2}
+        onChange={(e) => onChange({ glowIntensity: parseFloat(e.target.value) })}
+        className="w-full"
+      />
+    </div>
+
+    <div>
+      <div className="flex justify-between text-xs mb-1">
+        <span>Sample Density</span>
         <span className="font-mono text-studio-accent">{config.sampleCount || 256}</span>
       </div>
       <input
@@ -1202,106 +1239,263 @@ const GeometryControls: React.FC<{
 const BackgroundControls: React.FC<{
   config: BackgroundConfig;
   onChange: (p: Partial<BackgroundConfig>) => void;
-}> = ({ config, onChange }) => (
-  <div className="space-y-3 pt-2">
-    <div>
-      <label className="text-xs mb-1 block">Background Mode</label>
-      <select
-        value={config.mode}
-        onChange={(e) => onChange({ mode: e.target.value as any })}
-        className="w-full bg-studio-950 border border-studio-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 outline-none"
-      >
-        <option value="animatedNebula">Animated Cosmic Nebula</option>
-        <option value="synthwaveGrid">Synthwave Cyber Grid</option>
-        <option value="gradient">Directional Gradient</option>
-        <option value="solid">Minimal Solid Color</option>
-      </select>
-    </div>
+}> = ({ config, onChange }) => {
+  const showStars =
+    config.showStars ??
+    (config.mode === 'animatedNebula' || config.mode === 'hypnoticTunnel' || config.mode === 'liquidAurora');
 
-    {config.mode === 'gradient' && (
+  return (
+    <div className="space-y-4 pt-2">
+      <div>
+        <label className="text-xs mb-1 block font-medium text-slate-300">Background Style</label>
+        <select
+          value={config.mode}
+          onChange={(e) => {
+            const newMode = e.target.value as any;
+            const newShowStars =
+              newMode === 'animatedNebula' || newMode === 'hypnoticTunnel' || newMode === 'liquidAurora'
+                ? true
+                : newMode === 'solid' || newMode === 'retroCRT'
+                ? false
+                : config.showStars ?? false;
+            onChange({ mode: newMode, showStars: newShowStars });
+          }}
+          className="w-full bg-studio-950 border border-studio-800 rounded-lg px-2.5 py-2 text-xs text-slate-200 outline-none focus:border-studio-accent font-medium"
+        >
+          <option value="solid">Minimal Solid Studio</option>
+          <option value="gradient">Directional Studio Gradient</option>
+          <option value="animatedNebula">Animated Cosmic Nebula</option>
+          <option value="synthwaveGrid">Synthwave Cyber Grid</option>
+          <option value="hypnoticTunnel">Hypnotic Warp Tunnel</option>
+          <option value="liquidAurora">Liquid Aurora Waves</option>
+          <option value="digitalRain">Cyber Matrix Rain</option>
+          <option value="retroCRT">Analog VHS / CRT Studio</option>
+        </select>
+      </div>
+
+      {/* Mode-specific Controls */}
+      {config.mode === 'gradient' && (
+        <div>
+          <div className="flex justify-between text-xs mb-1">
+            <span>Gradient Angle</span>
+            <span className="font-mono text-studio-accent">{config.gradientAngle ?? 45}°</span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="360"
+            step="5"
+            value={config.gradientAngle ?? 45}
+            onChange={(e) => onChange({ gradientAngle: parseInt(e.target.value) })}
+            className="w-full"
+          />
+        </div>
+      )}
+
+      {(config.mode === 'synthwaveGrid' ||
+        config.mode === 'hypnoticTunnel' ||
+        config.mode === 'digitalRain') && (
+        <div>
+          <div className="flex justify-between text-xs mb-1">
+            <span>{config.mode === 'digitalRain' ? 'Matrix Column Density' : 'Grid / Tunnel Density'}</span>
+            <span className="font-mono text-studio-accent">{config.gridDensity ?? 32}</span>
+          </div>
+          <input
+            type="range"
+            min="12"
+            max="60"
+            step="2"
+            value={config.gridDensity ?? 32}
+            onChange={(e) => onChange({ gridDensity: parseInt(e.target.value) })}
+            className="w-full"
+          />
+        </div>
+      )}
+
+      {config.mode === 'retroCRT' && (
+        <div>
+          <div className="flex justify-between text-xs mb-1">
+            <span>Scanline Intensity</span>
+            <span className="font-mono text-studio-accent">
+              {Math.round((config.scanlineIntensity ?? 0.45) * 100)}%
+            </span>
+          </div>
+          <input
+            type="range"
+            min="0.0"
+            max="1.0"
+            step="0.05"
+            value={config.scanlineIntensity ?? 0.45}
+            onChange={(e) => onChange({ scanlineIntensity: parseFloat(e.target.value) })}
+            className="w-full"
+          />
+        </div>
+      )}
+
+      {/* Starfield & Space Dust Controls */}
+      <div className="p-3 bg-studio-950/70 rounded-xl border border-studio-800/80 space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="text-xs font-semibold text-slate-200 flex items-center gap-1.5 cursor-pointer">
+            <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+            <span>Twinkling Starfield</span>
+          </label>
+          <input
+            type="checkbox"
+            checked={showStars}
+            onChange={(e) => onChange({ showStars: e.target.checked })}
+            className="rounded bg-studio-900 border-studio-700 text-cyan-500 focus:ring-0 cursor-pointer w-4 h-4"
+          />
+        </div>
+
+        {showStars && (
+          <div className="space-y-2.5 pt-1 border-t border-studio-800/60">
+            <div>
+              <div className="flex justify-between text-[11px] mb-1 text-slate-400">
+                <span>Star Density</span>
+                <span className="font-mono text-cyan-400">
+                  {Math.round((config.starDensity ?? 0.35) * 100)}%
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0.1"
+                max="1.0"
+                step="0.05"
+                value={config.starDensity ?? 0.35}
+                onChange={(e) => onChange({ starDensity: parseFloat(e.target.value) })}
+                className="w-full"
+              />
+            </div>
+
+            <div>
+              <div className="flex justify-between text-[11px] mb-1 text-slate-400">
+                <span>Twinkle Speed</span>
+                <span className="font-mono text-cyan-400">
+                  {(config.starSpeed ?? 1.0).toFixed(1)}x
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0.2"
+                max="3.0"
+                step="0.1"
+                value={config.starSpeed ?? 1.0}
+                onChange={(e) => onChange({ starSpeed: parseFloat(e.target.value) })}
+                className="w-full"
+              />
+            </div>
+
+            <button
+              onClick={() => onChange({ seed: parseFloat((Math.random() * 1000).toFixed(2)) })}
+              className="w-full flex items-center justify-center space-x-1.5 py-1.5 px-2 bg-studio-900 hover:bg-studio-850 text-slate-300 hover:text-white rounded-lg text-[11px] font-medium border border-studio-750 transition-colors"
+            >
+              <RefreshCw className="w-3 h-3 text-cyan-400" />
+              <span>Shuffle Star Pattern (New Seed)</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Animation & Reactivity */}
       <div>
         <div className="flex justify-between text-xs mb-1">
-          <span>Gradient Angle</span>
-          <span className="font-mono text-studio-accent">{(config.gradientAngle || 0)}°</span>
+          <span>Animation Speed</span>
+          <span className="font-mono text-studio-accent">
+            {(config.animationSpeed ?? 1.0).toFixed(1)}x
+          </span>
         </div>
         <input
           type="range"
-          min="0"
-          max="360"
-          step="5"
-          value={config.gradientAngle || 0}
-          onChange={(e) => onChange({ gradientAngle: parseInt(e.target.value) })}
+          min="0.1"
+          max="3.0"
+          step="0.1"
+          value={config.animationSpeed ?? 1.0}
+          onChange={(e) => onChange({ animationSpeed: parseFloat(e.target.value) })}
           className="w-full"
         />
       </div>
-    )}
 
-    <div>
-      <div className="flex justify-between text-xs mb-1">
-        <span>Animation Speed</span>
-        <span className="font-mono text-studio-accent">{(config.animationSpeed || 1.0).toFixed(1)}x</span>
+      <div>
+        <div className="flex justify-between text-xs mb-1">
+          <span>Audio Reactive Zoom Pulse</span>
+          <span className="font-mono text-studio-accent">
+            {(config.audioReactiveZoom ?? 0.4).toFixed(1)}
+          </span>
+        </div>
+        <input
+          type="range"
+          min="0.0"
+          max="1.5"
+          step="0.1"
+          value={config.audioReactiveZoom ?? 0.4}
+          onChange={(e) => onChange({ audioReactiveZoom: parseFloat(e.target.value) })}
+          className="w-full"
+        />
       </div>
-      <input
-        type="range"
-        min="0.1"
-        max="3.0"
-        step="0.1"
-        value={config.animationSpeed || 1.0}
-        onChange={(e) => onChange({ animationSpeed: parseFloat(e.target.value) })}
-        className="w-full"
-      />
-    </div>
 
-    <div>
-      <div className="flex justify-between text-xs mb-1">
-        <span>Audio Reactive Zoom Pulse</span>
-        <span className="font-mono text-studio-accent">{(config.audioReactiveZoom || 0.4).toFixed(1)}</span>
+      <div>
+        <div className="flex justify-between text-xs mb-1">
+          <span>Audio Reactivity Intensity</span>
+          <span className="font-mono text-studio-accent">
+            {(config.reactivityIntensity ?? 1.0).toFixed(1)}x
+          </span>
+        </div>
+        <input
+          type="range"
+          min="0.0"
+          max="2.0"
+          step="0.1"
+          value={config.reactivityIntensity ?? 1.0}
+          onChange={(e) => onChange({ reactivityIntensity: parseFloat(e.target.value) })}
+          className="w-full"
+        />
       </div>
-      <input
-        type="range"
-        min="0.0"
-        max="1.5"
-        step="0.1"
-        value={config.audioReactiveZoom || 0.4}
-        onChange={(e) => onChange({ audioReactiveZoom: parseFloat(e.target.value) })}
-        className="w-full"
-      />
-    </div>
 
-    <div>
-      <div className="flex justify-between text-xs mb-1">
-        <span>Film Grain Intensity</span>
-        <span className="font-mono text-studio-accent">
-          {((config.grainIntensity || 0.2) * 100).toFixed(0)}%
-        </span>
+      {/* Optics: Grain & Vignette */}
+      <div>
+        <div className="flex justify-between text-xs mb-1">
+          <span>Film Grain Intensity</span>
+          <span className="font-mono text-studio-accent">
+            {Math.round((config.grainIntensity ?? 0.2) * 100)}%
+          </span>
+        </div>
+        <input
+          type="range"
+          min="0.0"
+          max="0.8"
+          step="0.02"
+          value={config.grainIntensity ?? 0.2}
+          onChange={(e) => onChange({ grainIntensity: parseFloat(e.target.value) })}
+          className="w-full"
+        />
       </div>
-      <input
-        type="range"
-        min="0.0"
-        max="0.8"
-        step="0.02"
-        value={config.grainIntensity || 0.2}
-        onChange={(e) => onChange({ grainIntensity: parseFloat(e.target.value) })}
-        className="w-full"
-      />
-    </div>
 
-    <div>
-      <div className="flex justify-between text-xs mb-1">
-        <span>Vignette Edge Darkening</span>
-        <span className="font-mono text-studio-accent">
-          {((config.vignetteStrength || 0.5) * 100).toFixed(0)}%
-        </span>
+      <div>
+        <div className="flex justify-between text-xs mb-1">
+          <span>Vignette Edge Darkening</span>
+          <span className="font-mono text-studio-accent">
+            {Math.round((config.vignetteStrength ?? 0.45) * 100)}%
+          </span>
+        </div>
+        <input
+          type="range"
+          min="0.0"
+          max="1.0"
+          step="0.05"
+          value={config.vignetteStrength ?? 0.45}
+          onChange={(e) => onChange({ vignetteStrength: parseFloat(e.target.value) })}
+          className="w-full"
+        />
       </div>
-      <input
-        type="range"
-        min="0.0"
-        max="1.0"
-        step="0.05"
-        value={config.vignetteStrength || 0.5}
-        onChange={(e) => onChange({ vignetteStrength: parseFloat(e.target.value) })}
-        className="w-full"
-      />
+
+      {/* Procedural Re-roll Button */}
+      <button
+        onClick={() => onChange({ seed: parseFloat((Math.random() * 1000).toFixed(2)) })}
+        className="w-full flex items-center justify-center space-x-1.5 py-2 px-3 bg-studio-900/90 hover:bg-studio-800 text-slate-300 hover:text-white rounded-lg text-xs font-semibold border border-studio-750 transition-all hover:scale-[1.01]"
+      >
+        <RefreshCw className="w-3.5 h-3.5 text-studio-accent" />
+        <span>Reshuffle Procedural Seed</span>
+      </button>
     </div>
-  </div>
-);
+  );
+};

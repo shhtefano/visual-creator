@@ -227,6 +227,10 @@ export type BackgroundMode =
   | 'gradient'
   | 'animatedNebula'
   | 'synthwaveGrid'
+  | 'hypnoticTunnel'
+  | 'liquidAurora'
+  | 'digitalRain'
+  | 'retroCRT'
   | 'audioReactiveNoise'
   | 'customImage'
   | 'customVideo';
@@ -239,7 +243,7 @@ export interface BackgroundConfig extends BaseVisualLayerConfig {
   primaryColor: string;
   /** Secondary color for gradients or shader effects (hex) */
   secondaryColor: string;
-  /** Tertiary accent color for cosmic/grid shaders (hex) */
+  /** Tertiary accent color for cosmic/grid/laser shaders (hex) */
   accentColor: string;
   /** Gradient direction in degrees (0 - 360) */
   gradientAngle: number;
@@ -251,6 +255,20 @@ export interface BackgroundConfig extends BaseVisualLayerConfig {
   animationSpeed: number;
   /** Audio reactivity: background zoom / pulse with kick bass */
   audioReactiveZoom: number;
+  /** Overall audio reactive color & modulation intensity [0, 2] */
+  reactivityIntensity?: number;
+  /** Enable twinkling micro-stardust field */
+  showStars?: boolean;
+  /** Starfield particle density [0, 1] */
+  starDensity?: number;
+  /** Starfield twinkle speed [0.1, 3.0] */
+  starSpeed?: number;
+  /** Procedural random seed for unique star/nebula/matrix patterns */
+  seed?: number;
+  /** Grid or tunnel density [10, 60] */
+  gridDensity?: number;
+  /** Scanline intensity for retro CRT / VHS effect [0, 1] */
+  scanlineIntensity?: number;
   /** URL or base64 of uploaded custom background image/video */
   mediaUrl?: string;
   /** Custom media blur amount [0, 20px] */

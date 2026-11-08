@@ -168,7 +168,16 @@ export class VisualEngine {
     if (!this.renderer) return;
 
     try {
-      this.composer = new EffectComposer(this.renderer);
+      this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      this.renderer.toneMappingExposure = this.postProcessingSettings.toneMappingExposure || 1.15;
+
+      const renderTarget = new THREE.WebGLRenderTarget(width, height, {
+        type: THREE.HalfFloatType,
+        samples: 4,
+        format: THREE.RGBAFormat,
+      });
+
+      this.composer = new EffectComposer(this.renderer, renderTarget);
       this.composer.setSize(width, height);
 
       const renderPass = new RenderPass(this.scene, this.camera);
@@ -227,12 +236,22 @@ export class VisualEngine {
   }
 
   private updateCameraAspect(): void {
-    let targetAspect = 16 / 9;
-    if (this.aspectRatio === '9:16') targetAspect = 9 / 16;
-    else if (this.aspectRatio === '1:1') targetAspect = 1.0;
-
-    this.camera.aspect = targetAspect;
+    const actualAspect = this.width / (this.height || 1);
+    this.camera.aspect = actualAspect;
     this.camera.updateProjectionMatrix();
+
+    // Adjust camera distance for optimal composition across aspect ratios:
+    // At aspect ~1.777 (16:9), targetDistance = 7.0
+    // At aspect < 0.8 (9:16 portrait), pull camera back slightly to ~7.6 so all visual elements fit
+    if (actualAspect < 0.8) {
+      this.targetDistance = 7.6;
+    } else if (actualAspect < 1.2) {
+      this.targetDistance = 7.2;
+    } else {
+      this.targetDistance = 7.0;
+    }
+    this.cameraDistance = this.targetDistance;
+    this.updateCameraPosition();
   }
 
   public resize(width: number, height: number): void {
@@ -264,24 +283,25 @@ export class VisualEngine {
   /**
    * Set dedicated deterministic export mode with exact 1.0 pixel ratio
    */
-  public setExportMode(exporting: boolean, width?: number, height?: number): void {
+  public setExportMode(
+    exporting: boolean,
+    width?: number,
+    height?: number,
+    aspectRatio?: AspectRatio
+  ): void {
     this.isExporting = exporting;
     if (!this.renderer) return;
 
     if (exporting && width && height) {
+      if (aspectRatio) {
+        this.aspectRatio = aspectRatio;
+      }
       this.width = width;
       this.height = height;
       this.renderer.setPixelRatio(1.0);
       this.renderer.setSize(width, height, false);
 
-      if (this.composer) {
-        this.composer.setPixelRatio(1.0);
-        this.composer.setSize(width, height);
-      }
-      if (this.bloomPass) {
-        this.bloomPass.resolution.set(width, height);
-      }
-
+      this.setupPostProcessing(width, height);
       this.updateCameraAspect();
 
       for (const mod of this.modulesMap.values()) {
@@ -294,14 +314,7 @@ export class VisualEngine {
       this.renderer.setPixelRatio(this.pixelRatio);
       this.renderer.setSize(this.savedWidth, this.savedHeight);
 
-      if (this.composer) {
-        this.composer.setPixelRatio(this.pixelRatio);
-        this.composer.setSize(this.savedWidth, this.savedHeight);
-      }
-      if (this.bloomPass) {
-        this.bloomPass.resolution.set(this.savedWidth, this.savedHeight);
-      }
-
+      this.setupPostProcessing(this.savedWidth, this.savedHeight);
       this.updateCameraAspect();
 
       for (const mod of this.modulesMap.values()) {
